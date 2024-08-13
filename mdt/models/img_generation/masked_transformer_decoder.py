@@ -100,7 +100,7 @@ class MaskedTransformerImgDecoder(nn.Module):
         self.num_images = num_images
         # MAE Decoder Parameters -- Remember the CLS Token (if specified)!
         self.mask_token = nn.Parameter(torch.zeros(1, 1, self.decoder_embed_dim))
-        self.ctx_dec_pe = nn.Parameter(torch.randn(1, 2, 1, self.decoder_embed_dim))
+        self.ctx_dec_pe = nn.Parameter(torch.randn(1, self.num_images, 1, self.decoder_embed_dim))
         self.decoder_pe = nn.Parameter(
             torch.zeros(1, self.num_patches, self.decoder_embed_dim),
             requires_grad=False,
@@ -225,13 +225,13 @@ class MaskedTransformerImgDecoder(nn.Module):
         
         visible_patches = rearrange(visible_ctx_patches, "bsz ctx seq embed -> bsz (ctx seq) embed")
         
-        visible_per_frame = (visible_patches.shape[1]) // 2
+        visible_per_frame = (visible_patches.shape[1]) // self.num_images
         
         # Add Mask Tokens to Sequence and Unshuffle
         if self.symmetric_mask:
-            mask_tokens = self.mask_token.repeat(visible_patches.shape[0], 2, restore_idxs.shape[1] - visible_per_frame, 1)
+            mask_tokens = self.mask_token.repeat(visible_patches.shape[0], self.num_images, restore_idxs.shape[1] - visible_per_frame, 1)
         else:
-            mask_tokens = self.mask_token.repeat(visible_patches.shape[0], 2, restore_idxs.shape[2] - visible_per_frame, 1)
+            mask_tokens = self.mask_token.repeat(visible_patches.shape[0], self.num_images, restore_idxs.shape[2] - visible_per_frame, 1)
         
         projected_ctx_patches = rearrange(visible_patches, "bsz (ctx seq) embed -> bsz ctx seq embed", ctx=self.num_images)
         concatenated_ctx_patches = torch.cat([projected_ctx_patches, mask_tokens], dim=2)
@@ -239,13 +239,13 @@ class MaskedTransformerImgDecoder(nn.Module):
             unshuffled_ctx_patches = torch.gather(
                 concatenated_ctx_patches,
                 dim=2,
-                index=restore_idxs[:, None, ..., None].repeat(1, 2, 1, self.decoder_embed_dim),
+                index=restore_idxs[:, None, ..., None].repeat(1, self.num_images, 1, self.decoder_embed_dim),
             )
         else:
             unshuffled_ctx_patches = torch.gather(
                 concatenated_ctx_patches,
                 dim=2,
-                index=restore_idxs.unsqueeze(-1).repeat(1, 1, 1, self.decoder_embed_dim)
+                index=restore_idxs.unsqueeze(-1).repeat(1, self.num_images//2, 1, self.decoder_embed_dim)
             )
 
         
@@ -254,7 +254,7 @@ class MaskedTransformerImgDecoder(nn.Module):
         decoder_ctx_patches_pe = unshuffled_ctx_patches + (
             self.decoder_pe[None, ...]
         )
-        decoder_ctx_patches = decoder_ctx_patches_pe + self.ctx_dec_pe[:, :2, ...]
+        decoder_ctx_patches = decoder_ctx_patches_pe + self.ctx_dec_pe[:, :self.num_images, ...]
         decoder_patches = rearrange(decoder_ctx_patches, "bsz ctx seq embed -> bsz (ctx seq) embed")
         
         # add context embeddings

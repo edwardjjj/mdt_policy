@@ -221,6 +221,8 @@ class ExtendedDiskDataset(DiskDataset):
                    gen_img_static = stacked_data[self.obs_seq_len + img_gen_frame_diff - 1, :]
                 elif key == 'rgb_gripper':
                     gen_img_gripper = stacked_data[self.obs_seq_len + img_gen_frame_diff -1, :]
+                elif key == 'rgb_tactile':
+                    gen_img_tactile = stacked_data[self.obs_seq_len + img_gen_frame_diff - 1, :]
                 episode[key] = stacked_data[:self.obs_seq_len, :]
 
         if self.with_lang:
@@ -252,6 +254,7 @@ class ExtendedDiskDataset(DiskDataset):
         episode = self.merge_episodes(episode, goal_episode)
         episode['gen_static'] = gen_img_static
         episode['gen_gripper'] = gen_img_gripper
+        episode['gen_tactile'] = gen_img_tactile
         episode['future_frame_diff'] = np.array(img_gen_frame_diff)
         return episode
        

@@ -12,7 +12,7 @@ shuffle_val: false
 
 
 observation_space:
-  rgb_obs: ['rgb_static', 'rgb_gripper', 'gen_static', 'gen_gripper']
+  rgb_obs: ['rgb_static', 'rgb_gripper', 'rgb_tactile', 'gen_static', 'gen_gripper', 'gen_tactile']
   depth_obs: []
   state_obs: ['robot_obs']
   actions: ['rel_actions']

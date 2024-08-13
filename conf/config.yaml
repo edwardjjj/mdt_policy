@@ -2,6 +2,7 @@ defaults:
   - callbacks: calvin
   - datamodule: calvin
   - model: mdt_agent # mdt_agent
+  # - model: mdt_tactile_agent
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 

@@ -1,14 +1,14 @@
-_target_: mdt.models.mdtv_agent.MDTVAgent
+_target_: mdt.models.mdt_tactile_agent.MDTAgent
 _recursive_: false
 
 defaults:
   - language_goal: clip
   - visual_goal: clip
   - img_gen: masked_transformer
-  - model: mdtv_transformer 
+  - model: mdt_transformer
+  - _self_
 
-
-latent_dim: 384
+latent_dim: 512
 multistep: 10
 sampler_type: 'ddim'
 num_sampling_steps: 10
@@ -17,7 +17,7 @@ sigma_min: 0.001
 sigma_max: 80
 noise_scheduler: 'exponential'
 sigma_sample_density_type: 'loglogistic'
-use_lr_scheduler: True
+use_lr_scheduler: true
 act_window_size: 10
 cont_alpha: 1.0
 masked_beta: 1.0
@@ -25,14 +25,6 @@ use_distributed_clip: True
 use_text_not_embedding: True
 ckpt_path: null
 seed: ${seed}
-perceiver_depth: 6
-perceiver_heads: 8
-perceiver_dim_head: 64
-perceiver_num_time_embeds: 1
-perceiver_dim: 384
-num_latents: 3
-
-voltron_cache: /home/hk-project-robolear/ft4740/code/calvin_d/pretrained_model_weights
 
 optimizer:
   _target_: torch.optim.AdamW
@@ -49,3 +41,6 @@ lr_scheduler:
     total_steps: 50000  # Example total steps, adjust as needed
     phase_ratio: "(0.02, 0.08, 0.9)"
     lr: 1e-4 
+
+img_gen:
+  num_images: 4

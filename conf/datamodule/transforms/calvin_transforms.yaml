@@ -35,6 +35,16 @@ train:
     - _target_: torchvision.transforms.Normalize
       mean: [0.48145466, 0.4578275, 0.40821073]
       std: [0.26862954, 0.26130258, 0.27577711]
+  gen_tactile:
+    # - _target_: torchvision.transforms.Resize
+    #   size: 112
+    #   antialias: True
+    - _target_: torchvision.transforms.CenterCrop
+      size: [112, 112]
+    - _target_: mdt.utils.transforms.ScaleImageTensor
+    - _target_: torchvision.transforms.Normalize
+      mean: [0.5]
+      std: [0.25]
   depth_static:
     - _target_: torchvision.transforms.Resize
       size: 200
@@ -61,7 +71,7 @@ train:
     - _target_: mdt.utils.transforms.ScaleImageTensor
     - _target_: torchvision.transforms.Normalize
       mean: [0.5]
-      std: [0.5]
+      std: [0.25]
     - _target_: mdt.utils.transforms.AddGaussianNoise
       mean: [ 0.0 ]
       std: [ 0.01 ]
@@ -124,6 +134,17 @@ val:
     - _target_: torchvision.transforms.Normalize
       mean: [ 0.48145466, 0.4578275, 0.40821073 ]
       std: [ 0.26862954, 0.26130258, 0.27577711 ]
+    
+  gen_tactile:
+    # - _target_: torchvision.transforms.Resize
+    #   size: 112
+    #   antialias: True
+    - _target_: torchvision.transforms.CenterCrop
+      size: [112, 112]
+    - _target_: mdt.utils.transforms.ScaleImageTensor
+    - _target_: torchvision.transforms.Normalize
+      mean: [ 0.5 ]
+      std: [ 0.25 ]
   depth_static:
     - _target_: torchvision.transforms.Resize
       size: 200
@@ -138,7 +159,7 @@ val:
     - _target_: mdt.utils.transforms.ScaleImageTensor
     - _target_: torchvision.transforms.Normalize
       mean: [0.5]
-      std: [0.5]
+      std: [0.25]
   depth_tactile:
     - _target_: torchvision.transforms.Resize
       size: 64
