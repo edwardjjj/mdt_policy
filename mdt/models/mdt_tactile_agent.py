@@ -981,8 +981,9 @@ class MDTAgent(pl.LightningModule):
 
         rgb_static = obs["rgb_obs"]["rgb_static"]
         rgb_gripper = obs["rgb_obs"]["rgb_gripper"]
+        rgb_tactile = obs["rgb_obs"]["rgb_tactile"]
 
-        perceptual_emb = self.embed_visual_obs(rgb_static, rgb_gripper)
+        perceptual_emb = self.embed_visual_obs(rgb_static, rgb_gripper, rgb_tactile)
         perceptual_emb["modality"] = modality
 
         act_seq = self.denoise_actions(
