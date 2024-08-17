@@ -336,20 +336,28 @@ class MDTTransformer(nn.Module):
         return goals
 
     def process_state_embeddings(self, states):
+        states_list = []
         states_global = self.tok_emb(states["static"].to(torch.float32))
-        incam_states = self.incam_embed(states["gripper"].to(torch.float32))
-        left_tactile_states = self.left_tactile_embed(
-            states["left_tactile"].to(torch.float32)
-        )
-        right_tactile_states = self.right_tactile_embed(
-            states["right_tactile"].to(torch.float32)
-        )
+        states_list.append(states_global)
+        if "gripper" in states.keys():
+            incam_states = self.incam_embed(states["gripper"].to(torch.float32))
+            states_list.append(incam_states)
+        if "left_tactile" in states.keys():
+            left_tactile_states = self.left_tactile_embed(
+                states["left_tactile"].to(torch.float32)
+            )
+            right_tactile_states = self.right_tactile_embed(
+                states["right_tactile"].to(torch.float32)
+            )
+            states_list.append(left_tactile_states)
+            states_list.append(right_tactile_states)
         proprio_states = None
         # state_embed = torch.stack((states_global, incam_states, left_tactile_states, right_tactile_states), dim=2).reshape(
         #     states["gripper"].to(torch.float32).size(0), 4, self.embed_dim
         # )
 
-        state_embed = torch.stack((states_global, incam_states, left_tactile_states, right_tactile_states), dim=2)        # print(state_embed.shape)
+        state_embed = torch.stack((states_list), dim=2)        # print(state_embed.shape)
+
         state_embed = einops.rearrange(state_embed, "b t c d -> (b t) c d")
         proprio_states = None
         return state_embed, proprio_states
