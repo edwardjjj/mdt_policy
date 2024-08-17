@@ -74,7 +74,6 @@ class MDTAgent(pl.LightningModule):
         self.latent_dim = latent_dim
         img_gen["context_dim"] = self.latent_dim
         self.static_resnet = BesoResNetEncoder(self.latent_dim)
-        self.gripper_resnet = BesoResNetEncoder(self.latent_dim)
         self.left_tactile_resnet = BesoResNetEncoder(self.latent_dim)
         self.right_tactile_resnet = BesoResNetEncoder(self.latent_dim)
         self.act_window_size = act_window_size
@@ -171,10 +170,6 @@ class MDTAgent(pl.LightningModule):
                 },
                 {
                     "params": self.static_resnet.parameters(),
-                    "weight_decay": self.optimizer_config.transformer_weight_decay,
-                },
-                {
-                    "params": self.gripper_resnet.parameters(),
                     "weight_decay": self.optimizer_config.transformer_weight_decay,
                 },
                 {
@@ -1016,7 +1011,6 @@ class MDTAgent(pl.LightningModule):
     def on_train_start(self) -> None:
         self.model.to(dtype=self.dtype)
         self.static_resnet.to(dtype=self.dtype)
-        self.gripper_resnet.to(dtype=self.dtype)
         self.left_tactile_resnet.to(dtype=self.dtype)
         self.right_tactile_resnet.to(dtype=self.dtype)
         self.language_goal.to(dtype=self.dtype)
