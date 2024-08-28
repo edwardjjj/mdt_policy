@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple, Union, NamedTuple, List, Any
-import psutil
-import warnings
+from typing import Any, Dict, Generator, List, NamedTuple, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -9,7 +7,7 @@ from gym import spaces
 
 
 class RolloutBufferSamples(NamedTuple):
-    observations: Dict[str, torch.Tensor]
+    observations: torch.Tensor
     actions: torch.Tensor
     old_values: torch.Tensor
     old_log_prob: torch.Tensor
@@ -18,62 +16,11 @@ class RolloutBufferSamples(NamedTuple):
 
 
 class ReplayBufferSamples(NamedTuple):
-    observations: Dict[str, torch.Tensor]
+    observations: torch.Tensor
     actions: torch.Tensor
     next_observations: torch.Tensor
     dones: torch.Tensor
     rewards: torch.Tensor
-
-def get_obs_shape(
-    observation_space: spaces.Space,
-) -> Union[Tuple[int, ...], Dict[str, Tuple[int, ...]]]:
-    """
-    Get the shape of the observation (useful for the buffers).
-
-    :param observation_space:
-    :return:
-    """
-    if isinstance(observation_space, spaces.Box):
-        return observation_space.shape
-    elif isinstance(observation_space, spaces.Discrete):
-        # Observation is an int
-        return (1,)
-    elif isinstance(observation_space, spaces.MultiDiscrete):
-        # Number of discrete features
-        return (int(len(observation_space.nvec)),)
-    elif isinstance(observation_space, spaces.MultiBinary):
-        # Number of binary features
-        if type(observation_space.n) in [tuple, list, np.ndarray]:
-            return tuple(observation_space.n)
-        else:
-            return (int(observation_space.n),)
-    elif isinstance(observation_space, spaces.Dict):
-        return {key: get_obs_shape(subspace) for (key, subspace) in observation_space.spaces.items()}  # type: ignore[misc]
-
-    else:
-        raise NotImplementedError(f"{observation_space} observation space is not supported")
-
-
-def get_action_dim(action_space: spaces.Space) -> int:
-    """
-    Get the dimension of the action space.
-
-    :param action_space:
-    :return:
-    """
-    if isinstance(action_space, spaces.Box):
-        return int(np.prod(action_space.shape))
-    elif isinstance(action_space, spaces.Discrete):
-        # Action is an int
-        return 1
-    elif isinstance(action_space, spaces.MultiDiscrete):
-        # Number of discrete actions
-        return int(len(action_space.nvec))
-    elif isinstance(action_space, spaces.MultiBinary):
-        # Number of binary actions
-        return int(action_space.n)
-    else:
-        raise NotImplementedError(f"{action_space} action space is not supported")
 
 
 class BaseBuffer(ABC):
@@ -94,23 +41,19 @@ class BaseBuffer(ABC):
     def __init__(
         self,
         buffer_size: int,
-        observation_space: spaces.Space,
-        action_space: spaces.Space,
+        observation_dim: int,
+        action_dim: int,
         device: Union[torch.device, str] = "cuda",
         n_envs: int = 1,
     ):
         super().__init__()
         self.buffer_size = buffer_size
-        self.observation_space = observation_space
-        self.action_space = action_space
-        self.obs_shape = get_obs_shape(observation_space)  # type: ignore[assignment]
-
-        self.action_dim = get_action_dim(action_space)
+        self.observation_dim = observation_dim
+        self.action_dim = action_dim
         self.pos = 0
         self.full = False
         self.device = device
         self.n_envs = n_envs
-
     @staticmethod
     def swap_and_flatten(arr: np.ndarray) -> np.ndarray:
         """
@@ -125,7 +68,6 @@ class BaseBuffer(ABC):
         if len(shape) < 3:
             shape = (*shape, 1)
         return arr.swapaxes(0, 1).reshape(shape[0] * shape[1], *shape[2:])
-
     def size(self) -> int:
         """
         :return: The current size of the buffer
@@ -155,7 +97,7 @@ class BaseBuffer(ABC):
         self.pos = 0
         self.full = False
 
-    def sample(self, batch_size: int, env=None):
+    def sample(self, batch_size: int):
         """
         :param batch_size: Number of element to sample
         :param env: associated gym VecEnv
@@ -168,7 +110,8 @@ class BaseBuffer(ABC):
 
     @abstractmethod
     def _get_samples(
-        self, batch_inds: np.ndarray,
+        self,
+        batch_inds: np.ndarray,
     ):
         """
         :param batch_inds:
@@ -192,150 +135,166 @@ class BaseBuffer(ABC):
         return torch.as_tensor(array, device=self.device)
 
 
-
-class ReplayBuffer(BaseBuffer):
-    """
-    Replay buffer used in off-policy algorithms like SAC/TD3.
-
-    :param buffer_size: Max number of element in the buffer
-    :param observation_space: Observation space
-    :param action_space: Action space
-    :param device: PyTorch device
-    :param n_envs: Number of parallel environments
-    :param optimize_memory_usage: Enable a memory efficient variant
-        of the replay buffer which reduces by almost a factor two the memory used,
-        at a cost of more complexity.
-        See https://github.com/DLR-RM/stable-baselines3/issues/37#issuecomment-637501195
-        and https://github.com/DLR-RM/stable-baselines3/pull/28#issuecomment-637559274
-        Cannot be used in combination with handle_timeout_termination.
-    :param handle_timeout_termination: Handle timeout termination (due to timelimit)
-        separately and treat the task as infinite horizon task.
-        https://github.com/DLR-RM/stable-baselines3/issues/284
-    """
-
-    observations: np.ndarray
-    next_observations: np.ndarray
-    actions: np.ndarray
-    rewards: np.ndarray
-    dones: np.ndarray
-    timeouts: np.ndarray
-
+class RolloutBuffer(BaseBuffer):
     def __init__(
         self,
         buffer_size: int,
-        observation_space: spaces.Space,
-        action_space: spaces.Space,
-        device: Union[torch.device, str] = "auto",
+        observation_dim: int,
+        action_dim: int,
+        device: str = "cuda",
+        gae_lambda: float = 1,
+        gamma: float = 0.99,
         n_envs: int = 1,
-        handle_timeout_termination: bool = True,
     ):
-        super().__init__(buffer_size, observation_space, action_space, device, n_envs=n_envs)
+        super().__init__(buffer_size, observation_dim, action_dim, device, n_envs)
+        self.gae_lambda = gae_lambda
+        self.gamma = gamma
+        self.generator_ready = False
+        self.reset()
 
-        # Adjust buffer size
-        self.buffer_size = max(buffer_size // n_envs, 1)
-
-        # Check that the replay buffer can fit into the memory
-        if psutil is not None:
-            mem_available = psutil.virtual_memory().available
-
-        # there is a bug if both optimize_memory_usage and handle_timeout_termination are true
-        # see https://github.com/DLR-RM/stable-baselines3/issues/934
-        if optimize_memory_usage and handle_timeout_termination:
-            raise ValueError(
-                "ReplayBuffer does not support optimize_memory_usage = True "
-                "and handle_timeout_termination = True simultaneously."
-            )
-
-        self.observations = np.zeros((self.buffer_size, self.n_envs, *self.obs_shape), dtype=observation_space.dtype)
-
-        self.next_observations = np.zeros((self.buffer_size, self.n_envs, *self.obs_shape), dtype=observation_space.dtype)
-
-        self.actions = np.zeros(
-            (self.buffer_size, self.n_envs, self.action_dim), dtype=self._maybe_cast_dtype(action_space.dtype)
+    def reset(self) -> None:
+        self.observations = np.zeros(
+            (self.buffer_size, self.n_envs, self.observation_dim), dtype=np.float32
         )
-
+        self.actions = np.zeros(
+            (self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32
+        )
         self.rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
-        self.dones = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
-        # Handle timeouts termination properly if needed
-        # see https://github.com/DLR-RM/stable-baselines3/issues/284
+        self.returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.episode_starts = np.zeros(
+            (self.buffer_size, self.n_envs), dtype=np.float32
+        )
+        self.values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.generator_ready = False
+        super().reset()
 
-        if psutil is not None:
-            total_memory_usage: float = (
-                self.observations.nbytes + self.actions.nbytes + self.rewards.nbytes + self.dones.nbytes
+    def compute_returns_and_advantage(
+        self, last_values: torch.Tensor, dones: np.ndarray
+    ) -> None:
+        """
+        Post-processing step: compute the lambda-return (TD(lambda) estimate)
+        and GAE(lambda) advantage.
+
+        Uses Generalized Advantage Estimation (https://arxiv.org/abs/1506.02438)
+        to compute the advantage. To obtain Monte-Carlo advantage estimate (A(s) = R - V(S))
+        where R is the sum of discounted reward with value bootstrap
+        (because we don't always have full episode), set ``gae_lambda=1.0`` during initialization.
+
+        The TD(lambda) estimator has also two special cases:
+        - TD(1) is Monte-Carlo estimate (sum of discounted rewards)
+        - TD(0) is one-step estimate with bootstrapping (r_t + gamma * v(s_{t+1}))
+
+        For more information, see discussion in https://github.com/DLR-RM/stable-baselines3/pull/375.
+
+        :param last_values: state value estimation for the last step (one for each env)
+        :param dones: if the last step was a terminal step (one bool for each env).
+        """
+        # Convert to numpy
+        last_values = last_values.clone().cpu().numpy().flatten()  # type: ignore[assignment]
+
+        last_gae_lam = 0
+        for step in reversed(range(self.buffer_size)):
+            if step == self.buffer_size - 1:
+                next_non_terminal = 1.0 - dones.astype(np.float32)
+                next_values = last_values
+            else:
+                next_non_terminal = 1.0 - self.episode_starts[step + 1]
+                next_values = self.values[step + 1]
+            delta = (
+                self.rewards[step]
+                + self.gamma * next_values * next_non_terminal
+                - self.values[step]
             )
+            last_gae_lam = (
+                delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
+            )
+            self.advantages[step] = last_gae_lam
+        # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
+        # in David Silver Lecture 4: https://www.youtube.com/watch?v=PnHCvfgC_ZA
+        self.returns = self.advantages + self.values
 
-            total_memory_usage += self.next_observations.nbytes
-
-            if total_memory_usage > mem_available:
-                # Convert to GB
-                total_memory_usage /= 1e9
-                mem_available /= 1e9
-                warnings.warn(
-                    "This system does not have apparently enough memory to store the complete "
-                    f"replay buffer {total_memory_usage:.2f}GB > {mem_available:.2f}GB"
-                )
-
-    def add( # type: ignore
+    def add(
         self,
         obs: np.ndarray,
-        next_obs: np.ndarray,
         action: np.ndarray,
         reward: np.ndarray,
-        done: np.ndarray,
-        infos: List[Dict[str, Any]],
+        episode_start: np.ndarray,
+        value: torch.Tensor,
+        log_prob: torch.Tensor,
     ) -> None:
+        """
+        :param obs: Observation
+        :param action: Action
+        :param reward:
+        :param episode_start: Start of episode signal.
+        :param value: estimated value of the current state
+            following the current policy.
+        :param log_prob: log probability of the action
+            following the current policy.
+        """
+        if len(log_prob.shape) == 0:
+            # Reshape 0-d tensor to avoid error
+            log_prob = log_prob.reshape(-1, 1)
+
         # Reshape needed when using multiple envs with discrete observations
         # as numpy cannot broadcast (n_discrete,) to (n_discrete, 1)
         if isinstance(self.observation_space, spaces.Discrete):
             obs = obs.reshape((self.n_envs, *self.obs_shape))
-            next_obs = next_obs.reshape((self.n_envs, *self.obs_shape))
 
         # Reshape to handle multi-dim and discrete action spaces, see GH #970 #1392
         action = action.reshape((self.n_envs, self.action_dim))
 
-        # Copy to avoid modification by reference
         self.observations[self.pos] = np.array(obs)
-
-        self.next_observations[self.pos] = np.array(next_obs)
-
         self.actions[self.pos] = np.array(action)
         self.rewards[self.pos] = np.array(reward)
-        self.dones[self.pos] = np.array(done)
-
+        self.episode_starts[self.pos] = np.array(episode_start)
+        self.values[self.pos] = value.clone().cpu().numpy().flatten()
+        self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
         self.pos += 1
         if self.pos == self.buffer_size:
             self.full = True
-            self.pos = 0
 
+    def get(
+        self, batch_size: Optional[int] = None
+    ) -> Generator[RolloutBufferSamples, None, None]:
+        assert self.full, ""
+        indices = np.random.permutation(self.buffer_size * self.n_envs)
+        # Prepare the data
+        if not self.generator_ready:
+            _tensor_names = [
+                "observations",
+                "actions",
+                "values",
+                "log_probs",
+                "advantages",
+                "returns",
+            ]
 
-    def _get_samples(self, batch_inds: np.ndarray) -> ReplayBufferSamples:
-        # Sample randomly the env idx
-        env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_inds),))
+            for tensor in _tensor_names:
+                self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
+            self.generator_ready = True
 
-        next_obs = self.next_observations[batch_inds, env_indices, :]
+        # Return everything, don't create minibatches
+        if batch_size is None:
+            batch_size = self.buffer_size * self.n_envs
+
+        start_idx = 0
+        while start_idx < self.buffer_size * self.n_envs:
+            yield self._get_samples(indices[start_idx : start_idx + batch_size])
+            start_idx += batch_size
+
+    def _get_samples(
+        self,
+        batch_inds: np.ndarray,
+    ) -> RolloutBufferSamples:
         data = (
-            self.observations[batch_inds, env_indices, :],
-            self.actions[batch_inds, env_indices, :],
-            next_obs,
-            # Only use dones that are not due to timeouts
-            # deactivated by default (timeouts is initialized as an array of False)
-            (self.dones[batch_inds, env_indices] * (1 - self.timeouts[batch_inds, env_indices])).reshape(-1, 1),
-            self.rewards[batch_inds, env_indices].reshape(-1, 1),
+            self.observations[batch_inds],
+            self.actions[batch_inds],
+            self.values[batch_inds].flatten(),
+            self.log_probs[batch_inds].flatten(),
+            self.advantages[batch_inds].flatten(),
+            self.returns[batch_inds].flatten(),
         )
-        return ReplayBufferSamples(*tuple(map(self.to_torch, data))) # type:ignore
-
-    @staticmethod
-    def _maybe_cast_dtype(dtype: np.typing.DTypeLike) -> np.typing.DTypeLike: # type: ignore
-        """
-        Cast `np.float64` action datatype to `np.float32`,
-        keep the others dtype unchanged.
-        See GH#1572 for more information.
-
-        :param dtype: The original action space dtype
-        :return: ``np.float32`` if the dtype was float64,
-            the original dtype otherwise.
-        """
-        if dtype == np.float64:
-            return np.float32
-        return dtype
-
+        return RolloutBufferSamples(*tuple(map(self.to_torch, data)))

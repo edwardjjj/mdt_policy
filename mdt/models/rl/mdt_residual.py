@@ -25,7 +25,7 @@ class Actor(nn.Module):
         self.network = create_mlp(self.observation_dim, self.action_dim, self.net_arch)
         self.log_std = nn.Parameter(torch.ones(1, self.action_dim) * init_log_std)
 
-    def get_action(self, norm_obs: torch.Tensor, deterministic: bool = False):
+    def get_action_and_value(self, norm_obs: torch.Tensor, deterministic: bool = False) -> Tuple:
         action_mean = self.network(norm_obs)
         action_log_std = self.log_std.expand_as(action_mean)
         action_std = torch.exp(action_log_std)
@@ -36,9 +36,9 @@ class Actor(nn.Module):
             action = distribution.rsample()
 
         return (
-            action,
-            distribution.log_prob(action).sum(dim=1),
-            distribution.entropy().sum(dim=1),
+                action,
+                distribution.log_prob(action).sum(dim=1)
+                distribution.entropy().sum(dim=1)
         )
 
 
@@ -91,8 +91,11 @@ class ResidualPolicy(nn.Module):
         )
         self.critic = Critic(observation_dim, critic_net_arch, activation_fn)
 
-    def get_action(self, norm_obs, deterministic):
-        return self.actor.get_action(norm_obs, deterministic)
+    def get_action_and_value(self, norm_obs, deterministic):
+        return self.actor.get_action_and_value(norm_obs, deterministic)
+
+    def get_action(self, norm_obs, deterministic=False):
+        return self.actor.get_action_and_value(norm_obs, deterministic)[0]
 
     def get_value(self, norm_obs):
         return self.critic(norm_obs)
@@ -108,6 +111,7 @@ class MDTResidual(nn.Module):
         visual_encoder_config: DictConfig,
         device: str = "cuda",
         seed: int = 42,
+        action_scale: float = 0.1,
     ):
         super().__init__()
         self.mdt_config = mdt_config
@@ -118,6 +122,7 @@ class MDTResidual(nn.Module):
         self.visual_encoder = hydra.utils.instantiate(visual_encoder_config).to(self.device)
         self.base_actions = deque(maxlen=mdt_config.multistep)
         self.action_horizon = mdt_config.multistep
+        self.action_scale = action_scale
 
 
     def configure_mdt(self):
@@ -133,6 +138,14 @@ class MDTResidual(nn.Module):
             actions = self.sample_base_action(obs, goal)
             for i in range(self.action_horizon):
                 self.base_actions.append(actions[:, i, :])
+        base_action = self.base_actions.popleft()
+        norm_obs = self.residual_policy.process_obs(obs, goal)
+        residual_action = self.residual_policy.get_action(torch.concatenate([norm_obs, base_action]))
+        final_action = base_action + residual_action * self.action_scale
+        return final_action
+
+
+
 
 
 
