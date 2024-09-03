@@ -69,6 +69,7 @@ class MDTVAgent(pl.LightningModule):
         masked_beta: float = 1,
         use_distributed_clip: bool = False,
         use_text_not_embedding: bool = False,
+        use_delta_goal: bool = False,
         ckpt_path=None,
         seed: int = 42,
         perceiver_depth: int = 3,
@@ -79,6 +80,7 @@ class MDTVAgent(pl.LightningModule):
         num_latents: int = 3,
     ):
         super(MDTVAgent, self).__init__()
+        self.use_delta_goal = use_delta_goal
         self.latent_dim = latent_dim
         img_gen['context_dim'] = self.latent_dim 
         self.img_encoder = VoltronTokenEncoder(

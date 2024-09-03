@@ -1,0 +1,41 @@
+
+TASK_TO_LABEL = {
+    # rotation
+    "take the red block and rotate it to the right": 0,
+    "take the red block and rotate it to the left": 1,
+    "take the blue block and rotate it to the right": 2,
+    "take the blue block and rotate it to the left": 3,
+    "take the pink block and rotate it to the right": 4,
+    "take the pink block and rotate it to the left": 5,
+    # sliding
+    "go push the red block right": 6,
+    "go push the red block left": 7,
+    "go push the blue block right": 8,
+    "go push the blue block left": 9,
+    "go push the pink block right": 10,
+    "go push the pink block left": 11,
+    # open/close
+    "push the sliding door to the left side": 12,
+    "push the sliding door to the right side": 13,
+    "pull the handle to open the drawer": 14,
+    "push the handle to close the drawer": 15,
+    # lifting
+    "grasp and lift the red block": 16,
+    "grasp and lift the blue block": 17,
+    "grasp and lift the pink block": 18,
+    "lift the red block from the sliding cabinet": 19,
+    "lift the blue block from the sliding cabinet": 20,
+    "lift the pink block from the sliding cabinet": 21,
+    "Take the red block from the drawer": 22,
+    "Take the blue block from the drawer": 23,
+    "Take the pink block from the drawer": 24,
+    "store the grasped block in the sliding cabinet": 25,
+    "store the grasped block in the drawer": 26,
+    "slide the block that it falls into the drawer": 27,
+    "stack the grasped block": 28,
+    "remove the stacked block": 29,
+    "use the switch to turn on the light bulb": 30,
+    "use the switch to turn off the light bulb": 31,
+    "press the button to turn on the led light": 32,
+    "press the button to turn off the led light": 33,
+}
