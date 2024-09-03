@@ -285,7 +285,7 @@ class PPO:
         if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
             wandb.log({"rollout/ep_rew_mean": safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer])})
             wandb.log({"rollout/ep_len_mean": safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer])})
-            wandb.log({"time/fps": fps})
+        wandb.log({"time/fps": fps})
         wandb.log({"time/time_elapsed": int(time_elapsed)})
         wandb.log({"time/total_timesteps": self.num_timesteps})
         if len(self.ep_success_buffer) > 0:
