@@ -30,7 +30,7 @@ def eval_policy(policy: MDTVResidual, env, num_episodes) -> None:
                 break
     result = {}
     for i in range(1, 6):
-        result[f"completed {i} tasks"] = ep_rewards[1:i].sum() / ep_rewards[0:i].sum()
+        result[f"completed {i} tasks"] = ep_rewards[i:6].sum() / ep_rewards[0:6].sum()
     wandb.log(result)
 
 
