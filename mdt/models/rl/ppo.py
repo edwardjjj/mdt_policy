@@ -108,13 +108,13 @@ class PPO:
                 values.cpu(),
                 log_probs.cpu(),
             )
-            self._last_obs = deepcopy(new_obs)  # type: ignore[assignment]
+            self._last_obs = new_obs  # type: ignore[assignment]
             self._last_episode_starts = dones
                     
 
         with torch.no_grad():
             # Compute value for the last timestep
-            values = self.policy.get_values(new_obs)  # type: ignore[arg-type]
+            values = self.policy.get_values(deepcopy(new_obs))  # type: ignore[arg-type]
 
         self.rollout_buffer.compute_returns_and_advantage(
             last_values=values, dones=dones

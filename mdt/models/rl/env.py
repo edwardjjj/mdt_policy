@@ -1,9 +1,9 @@
 import contextlib
 import random
+import time
 from collections import deque
 from pathlib import Path
 from typing import Callable, Dict, List
-import time
 
 import einops
 import gym
@@ -37,7 +37,8 @@ class PlayTableTaskEnv(PlayTableSimEnv):
         use_egl: bool,
         language_embedding_path: str,
         sequences: List,
-        control_freq=30,
+        control_freq: int = 30,
+        ep_len: int = 360,
     ):
         super().__init__(
             robot_cfg=robot_cfg,
@@ -51,6 +52,8 @@ class PlayTableTaskEnv(PlayTableSimEnv):
             use_egl=use_egl,
             control_freq=control_freq,
         )
+        self.ep_len = ep_len
+        self.num_steps = 0
         self.observation_space_keys = observation_space_keys
         self.task_annotation = task_annotation
         self.sequences = sequences
@@ -70,51 +73,64 @@ class PlayTableTaskEnv(PlayTableSimEnv):
     def reset(self):  # type: ignore
         initial_state, eval_sequence = random.choice(self.sequences)
         robot_obs, scene_obs = get_env_state_for_initial_condition(initial_state)
+        self.current_sequence = deque(eval_sequence)
+        self.current_subtask = self.current_sequence.popleft()
         obs = super().reset(robot_obs=robot_obs, scene_obs=scene_obs)
         del obs["robot_obs"]
         del obs["scene_obs"]
         obs = self.process_obs(obs)
-        self.current_sequence = deque(eval_sequence)
-        self.current_subtask = self.current_sequence.popleft()
-        goal_text = self.task_annotation[self.current_subtask][0]
-        obs["goal_label"] = torch.Tensor([self.task2label[goal_text]])
-        obs["goal_emb"] = torch.from_numpy(
-            self.language_embedding[self.current_subtask]["emb"].squeeze()
-        )
         self.start_info = super().get_info()
         self.rewards = []
+        self.num_steps = 0
         return obs, self.start_info
 
     def step(self, action: torch.Tensor):  # type: ignore
         action = action.clone().cpu().numpy()
         action[-1] = 1 if action[-1] > 0 else -1
         obs, reward, _, info = super().step(action)
+        self.num_steps += 1
         del obs["robot_obs"]
         del obs["scene_obs"]
-        obs = self.process_obs(obs)
         current_task_info = self.task_oracle.get_task_info_for_set(
             self.start_info, info, {self.current_subtask}
         )
+        # if comepleted current task, get reward, and do a new task
         if len(current_task_info) > 0:
             reward += 1
-            self.rewards.append(reward)
             if not self.current_sequence:
-                info["terminal_observation"] = obs
-                info["TimeLimit.truncated"] = False
-                new_obs, new_info = self.reset()
-                ep_rew = sum(self.rewards)
-                ep_len = len(self.rewards)
-                ep_info = {"r": round(ep_rew, 6), "l": ep_len, "t": round(time.time() - self.t_start, 6)}
-                info["episode"] = ep_info
-                return new_obs, reward, True, new_info
+                self.current_subtask = self.current_sequence.popleft()
+                self.start_info = super().get_info()
+        self.rewards.append(reward)
+        obs = self.process_obs(obs)
+        # done
+        if self.current_sequence and reward != 0:
+            new_obs, new_info = self.reset()
+            new_info["terminal_observation"] = obs
+            new_info["TimeLimit.truncated"] = False
+            ep_rew = sum(self.rewards)
+            ep_len = len(self.rewards)
+            ep_info = {
+                "r": round(ep_rew, 6),
+                "l": ep_len,
+                "t": round(time.time() - self.t_start, 6),
+            }
+            new_info["episode"] = ep_info
+            return new_obs, reward, True, new_info
+        # truncate
+        if self.num_steps > self.ep_len:
+            new_obs, new_info = self.reset()
+            new_info["terminal_observation"] = obs
+            new_info["TimeLimit.truncated"] = True
+            ep_rew = sum(self.rewards)
+            ep_len = len(self.rewards)
+            ep_info = {
+                "r": round(ep_rew, 6),
+                "l": ep_len,
+                "t": round(time.time() - self.t_start, 6),
+            }
+            new_info["episode"] = ep_info
+            return new_obs, reward, True, new_info
 
-            self.current_subtask = self.current_sequence.popleft()
-            self.start_info = super().get_info()
-        goal_text = self.task_annotation[self.current_subtask][0]
-        obs["goal_label"] = torch.Tensor([self.task2label[goal_text]])
-        obs["goal_emb"] = torch.from_numpy(
-            self.language_embedding[self.current_subtask]["emb"].squeeze()
-        )
         return obs, reward, False, info
 
     def process_obs(self, obs) -> Dict[str, torch.Tensor]:
@@ -138,6 +154,11 @@ class PlayTableTaskEnv(PlayTableSimEnv):
                     result = einops.rearrange(result, "w h c -> c w h")
                 return_obs[key] = result
 
+        goal_text = self.task_annotation[self.current_subtask][0]
+        return_obs ["goal_label"] = torch.Tensor([self.task2label[goal_text]])
+        return_obs ["goal_emb"] = torch.from_numpy(
+            self.language_embedding[self.current_subtask]["emb"].squeeze()
+        )
         return return_obs
 
 
