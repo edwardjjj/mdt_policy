@@ -12,11 +12,11 @@ import wandb
 
 @hydra.main(version_base="1.1", config_path="./conf", config_name="train_residual_calvin_abcd")
 def main(config: DictConfig):
-    wandb.init(project="residual_calvin", entity="aklab", tags=["mdtv", "abcd"])
+    run = wandb.init(project="residual_calvin", entity="aklab", tags=["mdtv", "abcd"])
 
     env_config = hydra.compose(config_name="calvin_env_abcd")
     sequences = get_sequences(env_config.env.num_sequences, 100)
-    env = SubprocVecEnv([make_playtable_env_func(env_config, sequences) for _ in range(2)])
+    env = SubprocVecEnv([make_playtable_env_func(env_config, sequences) for _ in range(10)])
     policy: MDTVResidual = hydra.utils.instantiate(config.policy, _recursive_=False)
     policy.configure_mdtv()
     policy.to(torch.device("cuda"))
@@ -37,7 +37,8 @@ def main(config: DictConfig):
         vf_coef=0.5,
         max_grad_norm=0.5,
     )
-    ppo.learn(100_000, log_interval=10)
+    ppo.learn(1_000_000, log_interval=10)
+    torch.save(policy.state_dict(), f"/home/edward/projects/mdt_policy/checkpoints/{run.id}.ckpt")
 
 if __name__ == "__main__":
     freeze_support()
