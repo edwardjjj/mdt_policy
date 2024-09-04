@@ -260,14 +260,26 @@ class MDTVResidual(nn.Module):
         residual_obs = self.process_residual_obs(raw_obs, next_base_action)
         return self.residual_policy.get_values(residual_obs)
 
-    def get_values_for_env(self, raw_obs, idx):
+    def get_values_for_env(self, raw_obs_for_env: Dict[str, torch.Tensor], idx: int) -> torch.Tensor:
+     
+        """Get critic value for env[idx]
+
+        Args:
+            raw_obs_for_env : Each entry of rgb_image has shape (1, C, W, H)
+            idx : env index
+
+        Returns:
+            torch.Tensor of scalar
+        """
         if not self.base_actions:
-            base_actions = self.sample_base_actions(raw_obs)
-            next_base_action = base_actions[:, 0, :]
+            base_actions = self.sample_base_actions(raw_obs_for_env) # (1, T, D)
+            next_base_action = base_actions[:, 0, :] # (1, D)
         else:
-            next_base_action = self.base_actions[0][idx].unsueeze(0)
-        residual_obs = self.process_residual_obs(raw_obs, next_base_action)
+            # self.base_actions: list(B, D) the list dimension is time
+            next_base_action = self.base_actions[0][idx].unsqueeze(0) # (1, D)
+        residual_obs = self.process_residual_obs(raw_obs_for_env, next_base_action)
         return self.residual_policy.get_values(residual_obs)
+
     def evaluate_actions(self, residual_obs, action):
         return self.residual_policy.evaluate_actions(residual_obs, action)
 
