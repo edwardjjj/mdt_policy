@@ -152,13 +152,13 @@ class PlayTableTaskEnv(PlayTableSimEnv):
                 result = torch.Tensor(child_obs)
                 if len(result.shape) == 3:
                     result = einops.rearrange(result, "w h c -> c w h")
-                return_obs[key] = result
+                return_obs[key] = result.unsqueeze(0)
 
         goal_text = self.task_annotation[self.current_subtask][0]
         return_obs ["goal_label"] = torch.Tensor([self.task2label[goal_text]])
         return_obs ["goal_emb"] = torch.from_numpy(
-            self.language_embedding[self.current_subtask]["emb"].squeeze()
-        )
+            self.language_embedding[self.current_subtask]["emb"]
+        ).squeeze(1)
         return return_obs
 
 

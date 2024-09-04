@@ -260,6 +260,14 @@ class MDTVResidual(nn.Module):
         residual_obs = self.process_residual_obs(raw_obs, next_base_action)
         return self.residual_policy.get_values(residual_obs)
 
+    def get_values_for_env(self, raw_obs, idx):
+        if not self.base_actions:
+            base_actions = self.sample_base_actions(raw_obs)
+            next_base_action = base_actions[:, 0, :]
+        else:
+            next_base_action = self.base_actions[0][idx].unsueeze(0)
+        residual_obs = self.process_residual_obs(raw_obs, next_base_action)
+        return self.residual_policy.get_values(residual_obs)
     def evaluate_actions(self, residual_obs, action):
         return self.residual_policy.evaluate_actions(residual_obs, action)
 
@@ -267,6 +275,7 @@ class MDTVResidual(nn.Module):
         self, raw_obs: Dict[str, torch.Tensor], base_actions: torch.Tensor
     ) -> torch.Tensor:
         goal_emb = raw_obs["goal_emb"].to(self.residual_policy.device)
+        # assert len(base_actions.shape) == 2, f"base_actions has shape {base_actions.shape}, expected (b, 7)"
         del raw_obs['goal_label']
         del raw_obs['goal_emb']
         for key, obs in raw_obs.items():
@@ -284,9 +293,12 @@ class MDTVResidual(nn.Module):
         )
         static_emb = self.static_encoder(static_image)
         gripper_emb = self.gripper_encoder(gripper_image)
+        # assert len(static_emb.shape) == 2, f"static_emb has shape {static_emb.shape}, expected (b, d)"
+        # assert len(gripper_emb.shape) == 2, f"static_emb has shape {gripper_emb.shape}, expected (b, d)"
         residual_obs = torch.cat(
             [static_emb, gripper_emb, tactile_emb, base_actions, goal_emb], dim=-1
         ).to(self.residual_policy.device)
+
         return residual_obs
 
     def process_mdtv_obs(

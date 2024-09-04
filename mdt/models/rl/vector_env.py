@@ -148,7 +148,7 @@ class SubprocVecEnv(PlayTableTaskEnv):
                     result[key] = []
                 result[key].append(tensor)
         for key in result:
-                result[key] = torch.stack(result[key], dim=0)
+                result[key] = torch.cat(result[key], dim=0)
         return result
 
     def close(self) -> None:

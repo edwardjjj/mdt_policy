@@ -56,6 +56,7 @@ env:
   use_scene_info: true
   use_egl: true
   control_freq: 30
+  ep_len: 360
   observation_space_keys:
     rgb_obs:
     - rgb_static

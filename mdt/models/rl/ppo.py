@@ -96,8 +96,10 @@ class PPO:
                     and infos[idx].get("TimeLimit.truncated", False)
                 ):
                     terminal_obs = infos[idx]["terminal_observation"]
+
+                    # estimate terminal value for env[idx]
                     with torch.no_grad():
-                        terminal_value = self.policy.get_values(terminal_obs)  # type: ignore[arg-type]
+                        terminal_value = self.policy.get_values_for_env(terminal_obs, idx)  # type: ignore[arg-type]
                     rewards[idx] += self.gamma * terminal_value
 
             self.rollout_buffer.add(
