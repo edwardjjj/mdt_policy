@@ -346,6 +346,8 @@ class MDTVResidual(nn.Module):
                 obs_transforms
             )
 
+    def reset(self):
+        self.base_actions = deque(maxlen=self.mdtv_config.multistep)
 
 class ResNet(pl.LightningModule):
     def __init__(

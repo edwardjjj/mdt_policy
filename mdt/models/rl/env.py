@@ -86,6 +86,7 @@ class PlayTableTaskEnv(PlayTableSimEnv):
 
     def step(self, action: torch.Tensor):  # type: ignore
         action = action.clone().cpu().numpy()
+        action = action.squeeze()
         action[-1] = 1 if action[-1] > 0 else -1
         obs, reward, _, info = super().step(action)
         self.num_steps += 1
