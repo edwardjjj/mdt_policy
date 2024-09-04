@@ -129,8 +129,8 @@ class SubprocVecEnv(PlayTableTaskEnv):
         obs, rewards, dones, infos = zip(*results)
         return (
             self._flatten_obs(obs),
-            torch.Tensor(rewards),
-            torch.Tensor(dones),
+            torch.Tensor(rewards).unsqueeze(1),
+            torch.Tensor(dones).unsqueeze(1),
             infos,
         )
 
