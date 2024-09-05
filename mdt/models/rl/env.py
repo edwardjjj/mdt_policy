@@ -98,13 +98,13 @@ class PlayTableTaskEnv(PlayTableSimEnv):
         # if comepleted current task, get reward, and do a new task
         if len(current_task_info) > 0:
             reward += 1
-            if not self.current_sequence:
+            if self.current_sequence:
                 self.current_subtask = self.current_sequence.popleft()
                 self.start_info = super().get_info()
         self.rewards.append(reward)
         obs = self.process_obs(obs)
         # done
-        if self.current_sequence and reward != 0:
+        if not self.current_sequence and reward != 0:
             new_obs, new_info = self.reset()
             new_info["terminal_observation"] = obs
             new_info["TimeLimit.truncated"] = False
