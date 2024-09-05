@@ -247,6 +247,7 @@ class MDTVResidual(nn.Module):
         residual_actions, values, log_probs = (
             self.residual_policy.get_actions_and_values(residual_obs)
         )
+        # actions = base_actions # sanity check, this should have same result as mdt
         actions = base_actions + residual_actions * self.residual_action_scale
         actions = torch.clip(actions, -1, 1)
         return actions, residual_actions, values, log_probs, residual_obs

@@ -64,7 +64,6 @@ class PPO:
         )
         self._n_updates = 0
         self.ep_info_buffer = None
-        self.ep_success_buffer = None
         self.stats_window_size = stats_window_size
 
     def collect_rollout(self, n_rollout_steps):
@@ -261,7 +260,6 @@ class PPO:
         self.start_time = time.time_ns()
         if self.ep_info_buffer is None:
             self.ep_info_buffer = deque(maxlen=self.stats_window_size)
-            self.ep_success_buffer = deque(maxlen=self.stats_window_size)
 
         total_timesteps += self.num_timesteps
         self._total_timesteps = total_timesteps
@@ -279,19 +277,16 @@ class PPO:
         :param iteration: Current logging iteration
         """
         assert self.ep_info_buffer is not None
-        assert self.ep_success_buffer is not None
 
         time_elapsed = max((time.time_ns() - self.start_time) / 1e9, sys.float_info.epsilon)
         fps = int((self.num_timesteps - self._num_timesteps_at_start) / time_elapsed)
         wandb.log({"time/iterations": iteration})
-        if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
+        if self.ep_info_buffer:
             wandb.log({"rollout/ep_rew_mean": safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer])})
             wandb.log({"rollout/ep_len_mean": safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer])})
         wandb.log({"time/fps": fps})
         wandb.log({"time/time_elapsed": int(time_elapsed)})
         wandb.log({"time/total_timesteps": self.num_timesteps})
-        if len(self.ep_success_buffer) > 0:
-            wandb.log({"rollout/success_rate": safe_mean(self.ep_success_buffer)})
 
     def _update_info_buffer(self, infos: List[Dict[str, Any]], dones: Optional[torch.Tensor] = None) -> None:
         """
@@ -302,17 +297,11 @@ class PPO:
         :param dones: Termination signals
         """
         assert self.ep_info_buffer is not None
-        assert self.ep_success_buffer is not None
 
-        if dones is None:
-            dones = torch.Tensor([False] * len(infos))
         for idx, info in enumerate(infos):
-            maybe_ep_info = info.get("episode")
-            maybe_is_success = info.get("is_success")
+            maybe_ep_info = info.get("ep_info")
             if maybe_ep_info is not None:
-                self.ep_info_buffer.extend([maybe_ep_info])
-            if maybe_is_success is not None and dones[idx]:
-                self.ep_success_buffer.append(maybe_is_success)
+                self.ep_info_buffer.append(maybe_ep_info)
 
 
 def explained_variance(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
@@ -342,6 +331,9 @@ def safe_mean(arr: Union[np.ndarray, torch.Tensor, list, deque]) -> float:
     :return:
     """
     if isinstance(arr, torch.Tensor):
-        arr.numpy()
-    return np.nan if len(arr) == 0 else float(np.mean(arr))  # type: ignore[arg-type]
+        arr = arr.numpy()
+    if len(arr) == 0:
+        return np.nan
+    else:
+        return float(np.mean(arr)) # type: ignore
 

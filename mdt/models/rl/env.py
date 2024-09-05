@@ -105,23 +105,20 @@ class PlayTableTaskEnv(PlayTableSimEnv):
         obs = self.process_obs(obs)
         # done
         if not self.current_sequence and sum(self.rewards) == 5:
+            ep_rew = sum(self.rewards)
+            ep_len = len(self.rewards)
+            ep_info = {
+                "r": round(ep_rew, 6),
+                "l": ep_len,
+                "t": round(time.time() - self.t_start, 6),
+            }
             new_obs, new_info = self.reset()
             new_info["terminal_observation"] = obs
             new_info["TimeLimit.truncated"] = False
-            ep_rew = sum(self.rewards)
-            ep_len = len(self.rewards)
-            ep_info = {
-                "r": round(ep_rew, 6),
-                "l": ep_len,
-                "t": round(time.time() - self.t_start, 6),
-            }
-            new_info["episode"] = ep_info
+            new_info["ep_info"] = ep_info
             return new_obs, reward, True, new_info
         # truncate
         if self.num_steps > self.ep_len:
-            new_obs, new_info = self.reset()
-            new_info["terminal_observation"] = obs
-            new_info["TimeLimit.truncated"] = True
             ep_rew = sum(self.rewards)
             ep_len = len(self.rewards)
             ep_info = {
@@ -129,7 +126,10 @@ class PlayTableTaskEnv(PlayTableSimEnv):
                 "l": ep_len,
                 "t": round(time.time() - self.t_start, 6),
             }
-            new_info["episode"] = ep_info
+            new_obs, new_info = self.reset()
+            new_info["terminal_observation"] = obs
+            new_info["TimeLimit.truncated"] = True
+            new_info["ep_info"] = ep_info
             return new_obs, reward, True, new_info
 
         return obs, reward, False, info
