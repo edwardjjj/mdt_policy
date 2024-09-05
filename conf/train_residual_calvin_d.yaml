@@ -664,3 +664,21 @@ logger:
   project: ${benchmark_name}
   entity: aklab
   id: ???
+
+ppo:
+  _target_: mdt.models.rl.ppo.PPO
+  observation_dim: 903
+  action_dim: 7
+  buffer_size: ${ppo.n_steps}
+  n_steps: 256
+  device: "cuda"
+  batch_size: 256
+  n_epochs: 5
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.001
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+
+
