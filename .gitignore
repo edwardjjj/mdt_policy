@@ -1,5 +1,8 @@
-pretrained_models
-vcache
+pretrained_models/
+vcache/
+voltron/
+checkpoints/
+.idea/
 
 # Byte-compiled / optimized / DLL files
 logs/
