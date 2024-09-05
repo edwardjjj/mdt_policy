@@ -100,7 +100,7 @@ class PPO:
                     # estimate terminal value for env[idx]
                     with torch.no_grad():
                         terminal_value = self.policy.get_values_for_env(terminal_obs, idx)  # type: ignore[arg-type]
-                    rewards[idx] += self.gamma * terminal_value.squeeze()
+                    rewards[idx] += (self.gamma * terminal_value.squeeze()).to(rewards.device)
 
             self.rollout_buffer.add(
                 last_residual_obs.cpu(),
