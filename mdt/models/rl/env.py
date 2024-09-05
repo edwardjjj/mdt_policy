@@ -104,7 +104,7 @@ class PlayTableTaskEnv(PlayTableSimEnv):
         self.rewards.append(reward)
         obs = self.process_obs(obs)
         # done
-        if not self.current_sequence and reward != 0:
+        if not self.current_sequence and sum(self.rewards) == 5:
             new_obs, new_info = self.reset()
             new_info["terminal_observation"] = obs
             new_info["TimeLimit.truncated"] = False
