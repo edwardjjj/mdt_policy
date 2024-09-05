@@ -54,13 +54,13 @@ def train(config, env_config, eval_episodes) -> None:
     )
     sequences = get_sequences(env_config.env.num_sequences)
     train_env = SubprocVecEnv(
-        [make_playtable_env_func(env_config, sequences) for _ in range(10)]
+        [make_playtable_env_func(env_config, sequences) for _ in range(config.num_envs)]
     )
     policy: MDTVResidual = hydra.utils.instantiate(config.policy, _recursive_=False)
     policy.configure_mdtv()
     policy.to(torch.device("cuda"))
     ppo: PPO = hydra.utils.instantiate(config.ppo, policy=policy, env=train_env)
-    ppo.learn(1_000, log_interval=10)
+    ppo.learn(config.num_training_steps, log_interval=config.log_interval)
     train_env.close()
     eval_env:PlayTableTaskEnv = make_playtable_env_func(env_config, sequences)() # type:ignore
     eval_policy(policy, eval_env, eval_episodes)
@@ -79,7 +79,7 @@ def train(config, env_config, eval_episodes) -> None:
     "--config_name", default="train_residual_calvin_d", help="config name for training"
 )
 @click.option(
-    "--eval_episodes", default=500, help="number of eval episodes after training"
+    "--eval_episodes", default=20, help="number of eval episodes after training"
 )
 def main(eval, eval_ckpt_path, config_name, eval_episodes):
     if eval:
