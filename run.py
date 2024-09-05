@@ -57,23 +57,7 @@ def train(config, env_config) -> None:
     policy: MDTVResidual = hydra.utils.instantiate(config.policy, _recursive_=False)
     policy.configure_mdtv()
     policy.to(torch.device("cuda"))
-    ppo = PPO(
-        env=train_env,
-        observation_dim=903,
-        action_dim=7,
-        buffer_size=10,
-        policy=policy,
-        device="cuda",
-        n_steps=10,
-        batch_size=10,
-        n_epochs=5,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.001,
-        vf_coef=0.5,
-        max_grad_norm=0.5,
-    )
+    ppo = hydra.utils.instantiate(config.ppo, policy=policy, env=train_env)
     ppo.learn(1_000, log_interval=10)
     train_env.close()
     eval_env = make_playtable_env_func(env_config, sequences)()
