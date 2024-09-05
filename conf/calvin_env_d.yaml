@@ -44,7 +44,7 @@ env:
   _recursive_: false
   task_annotation: ${annotation}
   language_embedding_path: /home/edward/projects/mdt_policy/dataset/calvin_debug_dataset/validation/lang_clip_resnet50/embeddings.npy
-  num_sequences: 10
+  num_sequences: 1000
   task_cfg: ${tasks}
   cameras: ${cameras}
   seed: 0
